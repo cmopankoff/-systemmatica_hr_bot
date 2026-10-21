@@ -224,13 +224,13 @@ function remainingNorm(stage){
   var s=0; for(var i=stage;i<STAGES.length;i++) s+=Number(settings.norms[i])||0; return s;
 }
 function riskOf(o){
-  if(o.done) return {key:'done', text:'Закрыт', slack:null};
+  if(o.done) return {key:'done', text:'Закрыт', full:'Закрыт', slack:null};
   var left = daysBetween(startOfToday(), parseIso(o.promised));
-  if(left<0) return {key:'over', text:'Просрочен на '+(-left)+' дн.', slack:left};
+  if(left<0) return {key:'over', text:'Просрочен на '+(-left)+' дн.', full:'Просрочен на '+(-left)+' дн.', slack:left};
   var slack = left - remainingNorm(o.stage);
-  if(slack<0) return {key:'risk', text:'Не успеваем по нормам: не хватает '+(-slack)+' дн.', slack:slack};
-  if(slack<settings.tight) return {key:'tight', text:'Впритык: запас '+slack+' дн. по нормам', slack:slack};
-  return {key:'ok', text:'В графике: запас '+slack+' дн. по нормам', slack:slack};
+  if(slack<0) return {key:'risk', text:'Не успеваем: запас −'+(-slack)+' дн.', full:'Не успеваем по нормам: не хватает '+(-slack)+' дн.', slack:slack};
+  if(slack<settings.tight) return {key:'tight', text:'Впритык: запас '+slack+' дн.', full:'Впритык: запас '+slack+' дн. по нормам', slack:slack};
+  return {key:'ok', text:'В графике: запас '+slack+' дн.', full:'В графике: запас '+slack+' дн. по нормам', slack:slack};
 }
 function contribution(o){ return (Number(o.amount)||0)-(Number(o.costs)||0); }
 function contribPctNum(o){ var a=Number(o.amount)||0; return a>0? Math.round(contribution(o)/a*100) : ''; }
@@ -350,7 +350,9 @@ function card(o){
   c.appendChild(top);
   c.appendChild(el('div','sub',o.channel+' · '+o.owner));
   c.appendChild(el('div','sub','Обещано клиенту: '+fmtDate(o.promised)+relDays(o)));
-  c.appendChild(el('span','badge '+r.key,r.text));
+  var bd=el('span','badge '+r.key,r.text);
+  if(r.slack!==null && r.key!=='over') bd.title='Запас = дней до обещанной даты − сумма норм оставшихся этапов';
+  c.appendChild(bd);
   var actLate = !o.done && o.next && o.nextDue && o.nextDue<iso(startOfToday());
   var nx=el('div','next', o.next? ('→ '+o.next+(o.nextDue?' (до '+fmtDate(o.nextDue)+(actLate?', просрочено':'')+')':'')) : '⚠ Нет следующего действия');
   if(!o.done && (!o.next || actLate)) nx.classList.add('late');
@@ -463,7 +465,7 @@ $('bCsv').addEventListener('click',function(){
   var rows=[head];
   filtered().forEach(function(o){
     rows.push([o.num,o.channel,o.city,STAGES[o.stage],o.owner,o.promised,o.next,o.nextDue||'',
-      o.amount,o.costs,contribution(o),contribPctNum(o),riskOf(o).text,o.done?'да':'нет']);
+      o.amount,o.costs,contribution(o),contribPctNum(o),riskOf(o).full,o.done?'да':'нет']);
   });
   var text='﻿'+rows.map(function(r){return r.map(csvCell).join(';');}).join('\r\n');
   var blob=new Blob([text],{type:'text/csv;charset=utf-8'});
