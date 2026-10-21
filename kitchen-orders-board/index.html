@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Доска заказов — демо-прототип</title>
+<style>
+:root{
+  --bg:#f4f5f7; --panel:#fff; --text:#1d2330; --muted:#667085; --line:#dfe3ea;
+  --accent:#2f5bea; --ok:#1f8a4c; --tight:#b7791f; --risk:#d9480f; --over:#c92a2a;
+  --ok-bg:#e6f4ec; --tight-bg:#fdf3dc; --risk-bg:#ffeadd; --over-bg:#fde8e8; --warn-bg:#fff7d6;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#14171d; --panel:#1d222b; --text:#e8ebf1; --muted:#98a2b3; --line:#323a47;
+    --accent:#7b9bff; --ok:#4cc17d; --tight:#e5b04a; --risk:#ff8a52; --over:#ff7676;
+    --ok-bg:#16301f; --tight-bg:#3a2f12; --risk-bg:#3d2315; --over-bg:#3d1a1a; --warn-bg:#3a3414;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:14px 16px 0}
+h1{font-size:20px;margin:0 0 8px}
+.banner{background:var(--warn-bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px}
+.summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;min-width:120px}
+.stat b{display:block;font-size:17px}
+.stat span{color:var(--muted);font-size:12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:0 16px 12px}
+input,select,textarea,button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+button{cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.card:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.toolbar input[type=search]{min-width:200px;flex:1 1 200px;max-width:320px}
+.spacer{flex:1}
+.board{display:grid;grid-template-columns:repeat(5,minmax(240px,1fr));gap:10px;padding:0 16px 24px;overflow-x:auto}
+.col{background:var(--bg);border:1px solid var(--line);border-radius:10px;min-height:200px;display:flex;flex-direction:column}
+.col.drop{outline:2px dashed var(--accent)}
+.col h2{font-size:14px;margin:0;padding:10px 10px 6px}
+.col .meta{color:var(--muted);font-size:12px;padding:0 10px 8px}
+.cards{padding:0 8px 8px;display:flex;flex-direction:column;gap:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--ok);border-radius:8px;padding:8px 10px;cursor:grab}
+.card.tight{border-left-color:var(--tight)} .card.risk{border-left-color:var(--risk)} .card.over{border-left-color:var(--over)} .card.done{opacity:.65;border-left-color:var(--muted)}
+.card .top{display:flex;justify-content:space-between;gap:6px;align-items:baseline}
+.card .num{font-weight:600}
+.card .sub{color:var(--muted);font-size:12px}
+.badge{display:inline-block;font-size:12px;border-radius:99px;padding:1px 8px;margin-top:4px}
+.badge.ok{background:var(--ok-bg);color:var(--ok)} .badge.tight{background:var(--tight-bg);color:var(--tight)}
+.badge.risk{background:var(--risk-bg);color:var(--risk)} .badge.over{background:var(--over-bg);color:var(--over)} .badge.done{background:var(--line);color:var(--muted)}
+.next{margin-top:4px;font-size:13px}
+.next.late{color:var(--over);font-weight:600}
+.money{margin-top:6px;font-size:12px;border-top:1px dashed var(--line);padding-top:4px;display:grid;grid-template-columns:auto auto;gap:0 8px;justify-content:space-between}
+.card select{margin-top:6px;width:100%;padding:3px 6px;font-size:12px}
+.card .actions{display:flex;gap:6px;margin-top:6px}
+.card .actions button{padding:2px 8px;font-size:12px}
+.empty{color:var(--muted);font-size:12px;padding:8px;text-align:center}
+.foot{padding:0 16px 24px;color:var(--muted);font-size:12px;max-width:900px}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:16px;width:min(520px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h3{margin:0 0 10px}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.form label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
+.form .wide{grid-column:1/-1}
+.form input,.form select{width:100%}
+.preview{grid-column:1/-1;font-size:13px;background:var(--bg);border-radius:6px;padding:6px 10px}
+.dlg-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.norms{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.norms label{font-size:12px;color:var(--muted);display:flex;flex-direction:column}
+.norms input{width:84px}
+@media (max-width:700px){.form{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Доска заказов кухонь — демо-прототип</h1>
+  <div class="banner">
+    <b>Все данные вымышленные</b> (заказы «ДЕМО-…», города, каналы и сотрудники придуманы для показа).
+    «Предварительный вклад» = сумма заказа − введённые прямые затраты. Это <b>не чистая прибыль</b>: косвенные расходы, налоги и прочее не учитываются.
+  </div>
+  <div class="summary" id="summary"></div>
+</header>
+
+<div class="toolbar">
+  <input type="search" id="q" placeholder="Поиск: номер, город, ответственный, действие" aria-label="Поиск">
+  <select id="fChannel" aria-label="Фильтр по каналу"></select>
+  <select id="fRisk" aria-label="Фильтр по риску">
+    <option value="">Любой статус срока</option>
+    <option value="over">Просрочено</option>
+    <option value="risk">Не успеваем по нормам</option>
+    <option value="tight">Впритык</option>
+    <option value="ok">В графике</option>
+    <option value="done">Закрыто</option>
+    <option value="problem">Просрочено + под риском</option>
+  </select>
+  <button id="bNew" class="primary">+ Новый заказ</button>
+  <span class="spacer"></span>
+  <button id="bNorms">Нормы этапов</button>
+  <button id="bCsv">Выгрузить CSV</button>
+  <button id="bReset">Сбросить демо-данные</button>
+</div>
+
+<main class="board" id="board"></main>
+
+<p class="foot">
+  Статус срока считается в календарных днях: запас = дней до обещанной даты − сумма норм оставшихся этапов (включая текущий).
+  Нормы в этом прототипе — демонстрационные значения, их можно изменить кнопкой «Нормы этапов». Изменения сохраняются только в этом браузере (localStorage).
+  CSV выгружается с учётом текущих фильтров.
+</p>
+
+<dialog id="dlg">
+  <form method="dialog" id="orderForm">
+    <h3 id="dlgTitle">Заказ</h3>
+    <div class="form">
+      <label>Номер<input name="num" required maxlength="40"></label>
+      <label>Этап<select name="stage"></select></label>
+      <label>Канал<input name="channel" list="channels" required maxlength="40"></label>
+      <label>Город<input name="city" required maxlength="40"></label>
+      <label>Ответственный<input name="owner" required maxlength="40"></label>
+      <label>Обещанная клиенту дата<input type="date" name="promised" required></label>
+      <label class="wide">Следующее действие<input name="next" maxlength="120"></label>
+      <label>Срок действия<input type="date" name="nextDue"></label>
+      <label>Заказ закрыт<select name="done"><option value="0">Нет</option><option value="1">Да</option></select></label>
+      <label>Сумма заказа, ₽<input type="number" name="amount" min="0" step="1" required></label>
+      <label>Прямые затраты, ₽<input type="number" name="costs" min="0" step="1" required></label>
+      <div class="preview" id="preview"></div>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" id="bDelete">Удалить</button>
+      <span class="spacer"></span>
+      <button type="button" id="bCancel">Отмена</button>
+      <button type="submit" class="primary" value="save">Сохранить</button>
+    </div>
+  </form>
+  <datalist id="channels"></datalist>
+</dialog>
+
+<dialog id="dlgNorms">
+  <form method="dialog" id="normsForm">
+    <h3>Нормы этапов, дней (демо)</h3>
+    <div class="norms" id="normsFields"></div>
+    <label style="font-size:12px;color:var(--muted)">Порог «впритык», дней
+      <input type="number" id="tightDays" min="0" step="1" style="width:84px;display:block"></label>
+    <div class="dlg-actions">
+      <button type="button" id="bNormsCancel">Отмена</button>
+      <button type="submit" class="primary" value="save">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+'use strict';
+
+var STAGES = ['Замер','Дизайн','Согласование','Производство','Монтаж'];
+var KEY = 'kitchen-board-demo-v1';
+var DEFAULT_SETTINGS = { norms:[2,7,4,21,2], tight:3 };
+
+/* ---------- хранилище (с запасным вариантом без localStorage) ---------- */
+var memory = null;
+function load(){
+  try{ var raw = localStorage.getItem(KEY); if(raw) return JSON.parse(raw); }
+  catch(e){ if(memory) return memory; }
+  return null;
+}
+function save(){
+  var data = { orders:orders, settings:settings, seq:seq };
+  memory = data;
+  try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){}
+}
+
+/* ---------- даты ---------- */
+function startOfToday(){ var d=new Date(); d.setHours(0,0,0,0); return d; }
+function iso(d){ var m=d.getMonth()+1, day=d.getDate(); return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day; }
+function addDays(n){ var d=startOfToday(); d.setDate(d.getDate()+n); return iso(d); }
+function parseIso(s){ if(!s) return null; var p=s.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
+function daysBetween(a,b){ return Math.round((b-a)/86400000); }
+function fmtDate(s){ var d=parseIso(s); return d? d.toLocaleDateString('ru-RU'):'—'; }
+function money(n){ return Math.round(n).toLocaleString('ru-RU')+' ₽'; }
+
+/* ---------- демо-данные (вымышленные) ---------- */
+function demoOrders(){
+  function o(n,ch,city,stage,owner,prom,next,nd,amt,cost,done){
+    return {id:n, num:'ДЕМО-'+(n<10?'00':'0')+n, channel:ch, city:city, stage:stage, owner:owner,
+      promised:addDays(prom), next:next, nextDue:addDays(nd), amount:amt, costs:cost, done:!!done};
+  }
+  return [
+    o(1,'Сайт (демо)','Город А',0,'Сотрудник 1',50,'Согласовать время замера',2,300000,20000),
+    o(2,'Рекомендация (демо)','Город Б',1,'Сотрудник 2',45,'Отправить первый вариант проекта',3,450000,30000),
+    o(3,'Салон (демо)','Город А',2,'Сотрудник 1',12,'Получить подпись на договоре',-1,520000,40000),
+    o(4,'Соцсети (демо)','Город В',3,'Сотрудник 3',25,'Проверить готовность фасадов',4,380000,150000),
+    o(5,'Сайт (демо)','Город Б',3,'Сотрудник 2',-3,'Позвонить клиенту и назвать новую дату',0,610000,260000),
+    o(6,'Рекомендация (демо)','Город А',4,'Сотрудник 3',1,'Подтвердить бригаду монтажа',0,275000,120000),
+    o(7,'Салон (демо)','Город В',1,'Сотрудник 1',34,'Уточнить размеры техники',1,490000,35000),
+    o(8,'Соцсети (демо)','Город Б',4,'Сотрудник 2',9,'Согласовать доставку',2,330000,140000),
+    o(9,'Сайт (демо)','Город В',0,'Сотрудник 3',30,'Назначить выезд на замер',1,420000,25000),
+    o(10,'Рекомендация (демо)','Город А',3,'Сотрудник 1',40,'Запросить график производства',5,560000,230000),
+    o(11,'Салон (демо)','Город Б',4,'Сотрудник 2',-6,'Закрыть заказ и собрать отзыв',-5,295000,130000,true)
+  ];
+}
+
+var state = load();
+var orders = state ? state.orders : demoOrders();
+var settings = state ? state.settings : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+var seq = state ? state.seq : 100;
+
+/* ---------- расчёты ---------- */
+function remainingNorm(stage){
+  var s=0; for(var i=stage;i<STAGES.length;i++) s+=Number(settings.norms[i])||0; return s;
+}
+function riskOf(o){
+  if(o.done) return {key:'done', text:'Закрыт', slack:null};
+  var left = daysBetween(startOfToday(), parseIso(o.promised));
+  if(left<0) return {key:'over', text:'Просрочен на '+(-left)+' дн.', slack:left};
+  var slack = left - remainingNorm(o.stage);
+  if(slack<0) return {key:'risk', text:'Не успеваем: нехватка '+(-slack)+' дн.', slack:slack};
+  if(slack<settings.tight) return {key:'tight', text:'Впритык: запас '+slack+' дн.', slack:slack};
+  return {key:'ok', text:'В графике: запас '+slack+' дн.', slack:slack};
+}
+function contribution(o){ return (Number(o.amount)||0)-(Number(o.costs)||0); }
+function contribPct(o){ var a=Number(o.amount)||0; return a>0? Math.round(contribution(o)/a*100)+'%':'—'; }
+
+/* ---------- DOM-утилиты ---------- */
+function el(tag, cls, text){
+  var e=document.createElement(tag);
+  if(cls) e.className=cls;
+  if(text!=null) e.textContent=text;
+  return e;
+}
+var $ = function(id){ return document.getElementById(id); };
+
+/* ---------- фильтры ---------- */
+function filtered(){
+  var q=$('q').value.trim().toLowerCase();
+  var ch=$('fChannel').value, rk=$('fRisk').value;
+  return orders.filter(function(o){
+    if(ch && o.channel!==ch) return false;
+    var r=riskOf(o).key;
+    if(rk==='problem'){ if(r!=='over' && r!=='risk') return false; }
+    else if(rk && r!==rk) return false;
+    if(q){
+      var hay=[o.num,o.city,o.owner,o.next,o.channel].join(' ').toLowerCase();
+      if(hay.indexOf(q)===-1) return false;
+    }
+    return true;
+  });
+}
+function refreshChannelFilter(){
+  var sel=$('fChannel'), cur=sel.value;
+  var chans=[], seen={};
+  orders.forEach(function(o){ if(!seen[o.channel]){seen[o.channel]=1; chans.push(o.channel);} });
+  chans.sort();
+  sel.textContent='';
+  var first=el('option',null,'Все каналы'); first.value=''; sel.appendChild(first);
+  chans.forEach(function(c){ var op=el('option',null,c); op.value=c; sel.appendChild(op); });
+  sel.value = seen[cur]? cur : '';
+  var dl=$('channels'); dl.textContent='';
+  chans.forEach(function(c){ var op=document.createElement('option'); op.value=c; dl.appendChild(op); });
+}
+
+/* ---------- отрисовка ---------- */
+var RISK_ORDER={over:0,risk:1,tight:2,ok:3,done:4};
+function render(){
+  var list=filtered();
+
+  var open=list.filter(function(o){return !o.done;});
+  var sumAmt=0,sumCost=0,over=0,risk=0;
+  open.forEach(function(o){
+    sumAmt+=Number(o.amount)||0; sumCost+=Number(o.costs)||0;
+    var k=riskOf(o).key; if(k==='over') over++; else if(k==='risk'||k==='tight') risk++;
+  });
+  var sm=$('summary'); sm.textContent='';
+  [['В работе (по фильтру)',String(open.length)],
+   ['Просрочено',String(over)],
+   ['Под риском',String(risk)],
+   ['Сумма заказов',money(sumAmt)],
+   ['Предв. вклад (не прибыль)',money(sumAmt-sumCost)]
+  ].forEach(function(p){
+    var s=el('div','stat'); s.appendChild(el('b',null,p[1])); s.appendChild(el('span',null,p[0])); sm.appendChild(s);
+  });
+
+  var board=$('board'); board.textContent='';
+  STAGES.forEach(function(name,idx){
+    var col=el('section','col'); col.dataset.stage=idx;
+    var items=list.filter(function(o){return o.stage===idx;});
+    items.sort(function(a,b){
+      var ra=RISK_ORDER[riskOf(a).key], rb=RISK_ORDER[riskOf(b).key];
+      return ra-rb || (a.promised<b.promised?-1:1);
+    });
+    var total=items.reduce(function(s,o){return s+(Number(o.amount)||0);},0);
+    col.appendChild(el('h2',null,(idx+1)+'. '+name));
+    col.appendChild(el('div','meta',items.length+' зак. · '+money(total)));
+    var cards=el('div','cards');
+    if(!items.length) cards.appendChild(el('div','empty','Нет заказов'));
+    items.forEach(function(o){ cards.appendChild(card(o)); });
+    col.appendChild(cards);
+
+    col.addEventListener('dragover',function(e){ e.preventDefault(); col.classList.add('drop'); });
+    col.addEventListener('dragleave',function(){ col.classList.remove('drop'); });
+    col.addEventListener('drop',function(e){
+      e.preventDefault(); col.classList.remove('drop');
+      var id=e.dataTransfer.getData('text/plain');
+      moveTo(id, idx);
+    });
+    board.appendChild(col);
+  });
+}
+
+function card(o){
+  var r=riskOf(o);
+  var c=el('article','card '+r.key); c.draggable=true; c.tabIndex=0;
+  c.dataset.id=o.id;
+  c.addEventListener('dragstart',function(e){ e.dataTransfer.setData('text/plain',String(o.id)); e.dataTransfer.effectAllowed='move'; });
+  var top=el('div','top');
+  top.appendChild(el('span','num',o.num));
+  top.appendChild(el('span','sub',o.city));
+  c.appendChild(top);
+  c.appendChild(el('div','sub',o.channel+' · '+o.owner));
+  c.appendChild(el('div','sub','Обещано клиенту: '+fmtDate(o.promised)));
+  c.appendChild(el('span','badge '+r.key,r.text));
+  var nx=el('div','next', o.next? ('→ '+o.next+(o.nextDue?' (до '+fmtDate(o.nextDue)+')':'')) : '⚠ Нет следующего действия');
+  if(!o.done && (!o.next || (o.nextDue && o.nextDue<iso(startOfToday())))) nx.classList.add('late');
+  c.appendChild(nx);
+  var m=el('div','money');
+  m.appendChild(el('span',null,'Сумма')); m.appendChild(el('span',null,money(o.amount)));
+  m.appendChild(el('span',null,'Прямые затраты')); m.appendChild(el('span',null,money(o.costs)));
+  m.appendChild(el('span',null,'Предв. вклад')); m.appendChild(el('span',null,money(contribution(o))+' ('+contribPct(o)+')'));
+  c.appendChild(m);
+
+  var sel=el('select'); sel.setAttribute('aria-label','Этап заказа '+o.num);
+  STAGES.forEach(function(s,i){ var op=el('option',null,s); op.value=i; if(i===o.stage) op.selected=true; sel.appendChild(op); });
+  sel.addEventListener('change',function(){ moveTo(o.id, Number(sel.value)); });
+  c.appendChild(sel);
+  var act=el('div','actions');
+  var be=el('button',null,'Изменить'); be.type='button'; be.addEventListener('click',function(){ openOrder(o.id); });
+  act.appendChild(be); c.appendChild(act);
+  return c;
+}
+
+function findOrder(id){ for(var i=0;i<orders.length;i++) if(String(orders[i].id)===String(id)) return orders[i]; return null; }
+function moveTo(id, stage){
+  var o=findOrder(id); if(!o || o.stage===stage) { render(); return; }
+  if(stage<o.stage && !confirm('Вернуть заказ '+o.num+' на этап «'+STAGES[stage]+'»?')){ render(); return; }
+  o.stage=stage; save(); render();
+}
+
+/* ---------- форма заказа ---------- */
+var editingId=null;
+var form=$('orderForm');
+function fillStageSelect(){
+  var s=form.elements.stage; s.textContent='';
+  STAGES.forEach(function(n,i){ var op=el('option',null,n); op.value=i; s.appendChild(op); });
+}
+function updatePreview(){
+  var a=Number(form.elements.amount.value)||0, c=Number(form.elements.costs.value)||0;
+  $('preview').textContent='Предварительный вклад: '+money(a-c)+(a>0?' ('+Math.round((a-c)/a*100)+'%)':'')+' — не чистая прибыль.';
+}
+function openOrder(id){
+  editingId=id;
+  var o = id? findOrder(id) : {num:'ДЕМО-'+(seq+1), channel:'', city:'', stage:0, owner:'', promised:addDays(30), next:'', nextDue:'', amount:0, costs:0, done:false};
+  $('dlgTitle').textContent = id? 'Заказ '+o.num : 'Новый демо-заказ';
+  $('bDelete').style.display = id? '' : 'none';
+  var f=form.elements;
+  f.num.value=o.num; f.stage.value=o.stage; f.channel.value=o.channel; f.city.value=o.city; f.owner.value=o.owner;
+  f.promised.value=o.promised; f.next.value=o.next; f.nextDue.value=o.nextDue||'';
+  f.done.value=o.done?'1':'0'; f.amount.value=o.amount; f.costs.value=o.costs;
+  updatePreview();
+  $('dlg').showModal();
+}
+form.addEventListener('input',updatePreview);
+form.addEventListener('submit',function(e){
+  var f=form.elements;
+  if(!form.checkValidity()) return;
+  var data={ num:f.num.value.trim(), stage:Number(f.stage.value), channel:f.channel.value.trim(), city:f.city.value.trim(),
+    owner:f.owner.value.trim(), promised:f.promised.value, next:f.next.value.trim(), nextDue:f.nextDue.value,
+    done:f.done.value==='1', amount:Math.max(0,Number(f.amount.value)||0), costs:Math.max(0,Number(f.costs.value)||0) };
+  if(editingId){ Object.assign(findOrder(editingId), data); }
+  else { seq++; data.id=seq; orders.push(data); }
+  save(); refreshChannelFilter(); render();
+});
+$('bCancel').addEventListener('click',function(){ $('dlg').close(); });
+$('bDelete').addEventListener('click',function(){
+  var o=findOrder(editingId);
+  if(o && confirm('Удалить демо-заказ '+o.num+'?')){
+    orders=orders.filter(function(x){return x!==o;}); save(); $('dlg').close(); refreshChannelFilter(); render();
+  }
+});
+$('bNew').addEventListener('click',function(){ openOrder(null); });
+
+/* ---------- нормы ---------- */
+$('bNorms').addEventListener('click',function(){
+  var box=$('normsFields'); box.textContent='';
+  STAGES.forEach(function(n,i){
+    var l=el('label',null,n); var inp=document.createElement('input');
+    inp.type='number'; inp.min='0'; inp.step='1'; inp.value=settings.norms[i]; inp.dataset.i=i; l.appendChild(inp); box.appendChild(l);
+  });
+  $('tightDays').value=settings.tight;
+  $('dlgNorms').showModal();
+});
+$('normsForm').addEventListener('submit',function(){
+  var inputs=$('normsFields').querySelectorAll('input');
+  Array.prototype.forEach.call(inputs,function(inp){ settings.norms[Number(inp.dataset.i)]=Math.max(0,Number(inp.value)||0); });
+  settings.tight=Math.max(0,Number($('tightDays').value)||0);
+  save(); render();
+});
+$('bNormsCancel').addEventListener('click',function(){ $('dlgNorms').close(); });
+
+/* ---------- CSV ---------- */
+function csvCell(v){
+  var s = v==null? '' : String(v);
+  if(/^[=+\-@\t\r]/.test(s)) s="'"+s;          // защита от формул в Excel
+  if(/[";\n\r]/.test(s)) s='"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
+$('bCsv').addEventListener('click',function(){
+  var head=['Номер','Канал','Город','Этап','Ответственный','Обещанная дата','Следующее действие','Срок действия',
+            'Сумма, руб','Прямые затраты, руб','Предв. вклад, руб (не чистая прибыль)','Предв. вклад, %','Статус срока','Закрыт'];
+  var rows=[head];
+  filtered().forEach(function(o){
+    rows.push([o.num,o.channel,o.city,STAGES[o.stage],o.owner,o.promised,o.next,o.nextDue||'',
+      o.amount,o.costs,contribution(o),contribPct(o),riskOf(o).text,o.done?'да':'нет']);
+  });
+  var text='﻿'+rows.map(function(r){return r.map(csvCell).join(';');}).join('\r\n');
+  var blob=new Blob([text],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='demo-orders-'+iso(startOfToday())+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+});
+
+/* ---------- сброс ---------- */
+$('bReset').addEventListener('click',function(){
+  if(!confirm('Сбросить все изменения и вернуть исходные демо-данные?')) return;
+  orders=demoOrders(); settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); seq=100;
+  save(); refreshChannelFilter(); render();
+});
+
+['q','fChannel','fRisk'].forEach(function(id){
+  $(id).addEventListener('input',render);
+  $(id).addEventListener('change',render);
+});
+
+fillStageSelect();
+refreshChannelFilter();
+render();
+})();
+</script>
+</body>
+</html>
