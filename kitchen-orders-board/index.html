@@ -100,8 +100,8 @@ dialog h3{margin:0 0 10px}
   <button id="bReset">Сбросить демо-данные</button>
 </div>
 
-<div class="banner" id="nothing" hidden style="margin:0 16px 10px">
-  По текущим фильтрам и поиску ничего не найдено. <button type="button" id="bClear">Сбросить фильтры</button>
+<div class="banner" id="nothing" role="status" hidden style="margin:0 16px 10px">
+  <span id="nothingText"></span> <button type="button" id="bClear">Сбросить поиск и фильтры</button>
 </div>
 
 <main class="board" id="board"></main>
@@ -263,6 +263,13 @@ function filtered(){
   });
 }
 function filtersActive(){ return !!($('q').value.trim() || $('fChannel').value || $('fRisk').value); }
+function describeFilters(){
+  var parts=[], q=$('q').value.trim();
+  if(q) parts.push('поиск «'+q+'»');
+  if($('fChannel').value) parts.push('канал «'+$('fChannel').value+'»');
+  if($('fRisk').value) parts.push('статус срока «'+$('fRisk').selectedOptions[0].textContent+'»');
+  return parts.join(', ');
+}
 function resetFilters(){ $('q').value=''; $('fChannel').value=''; $('fRisk').value=''; }
 function refreshChannelFilter(){
   var sel=$('fChannel'), cur=sel.value;
@@ -298,8 +305,10 @@ function render(){
     var s=el('div','stat'); s.appendChild(el('b',null,p[1])); s.appendChild(el('span',null,p[0])); sm.appendChild(s);
   });
 
+  var noResults = !list.length;
   var nothing=$('nothing');
-  nothing.hidden = !(filtersActive() && !list.length);
+  nothing.hidden = !(filtersActive() && noResults);
+  if(!nothing.hidden) $('nothingText').textContent='Ничего не найдено: '+describeFilters()+'. Подходящих заказов нет ни на одной стадии.';
   var board=$('board'); board.textContent='';
   STAGES.forEach(function(name,idx){
     var col=el('section','col'); col.dataset.stage=idx;
@@ -314,7 +323,8 @@ function render(){
     col.appendChild(el('h2',null,(idx+1)+'. '+name));
     col.appendChild(el('div','meta',openItems.length+' откр.'+(closedN?' + '+closedN+' закр.':'')+' · '+money(total)+' (откр.)'));
     var cards=el('div','cards');
-    if(!items.length) cards.appendChild(el('div','empty', filtersActive()? 'Нет заказов, подходящих под фильтры' : 'На этом этапе заказов нет'));
+    if(!items.length && !noResults) cards.appendChild(el('div','empty', filtersActive()? 'На этой стадии нет заказов по текущим фильтрам' : 'На этой стадии заказов нет'));
+    if(!items.length && noResults && !filtersActive()) cards.appendChild(el('div','empty','На этой стадии заказов нет'));
     items.forEach(function(o){ cards.appendChild(card(o)); });
     col.appendChild(cards);
 
