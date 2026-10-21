@@ -81,7 +81,7 @@ dialog h3{margin:0 0 10px}
 </header>
 
 <div class="toolbar">
-  <input type="search" id="q" placeholder="Поиск: номер, город, ответственный, действие" aria-label="Поиск">
+  <input type="search" id="q" placeholder="Поиск по заказам" title="Ищет по номеру, каналу, городу, ответственному и следующему действию" aria-label="Поиск по номеру, каналу, городу, ответственному и следующему действию">
   <select id="fChannel" aria-label="Фильтр по каналу"></select>
   <select id="fRisk" aria-label="Фильтр по риску">
     <option value="">Любой статус срока</option>
@@ -90,13 +90,18 @@ dialog h3{margin:0 0 10px}
     <option value="tight">Впритык</option>
     <option value="ok">В графике</option>
     <option value="done">Закрыто</option>
-    <option value="problem">Просрочено + под риском</option>
+    <option value="atrisk">Под риском (не успеваем + впритык)</option>
+    <option value="soon">Срок клиенту в ближайшие 3 дня</option>
   </select>
   <button id="bNew" class="primary">+ Новый заказ</button>
   <span class="spacer"></span>
   <button id="bNorms">Нормы этапов</button>
   <button id="bCsv">Выгрузить CSV</button>
   <button id="bReset">Сбросить демо-данные</button>
+</div>
+
+<div class="banner" id="nothing" hidden style="margin:0 16px 10px">
+  По текущим фильтрам и поиску ничего не найдено. <button type="button" id="bClear">Сбросить фильтры</button>
 </div>
 
 <main class="board" id="board"></main>
@@ -158,9 +163,12 @@ var DEFAULT_SETTINGS = { norms:[2,7,4,21,2], tight:3 };
 /* ---------- хранилище (с запасным вариантом без localStorage) ---------- */
 var memory = null;
 function load(){
-  try{ var raw = localStorage.getItem(KEY); if(raw) return JSON.parse(raw); }
-  catch(e){ if(memory) return memory; }
-  return null;
+  var data=null;
+  try{ var raw = localStorage.getItem(KEY); if(raw) data = JSON.parse(raw); }
+  catch(e){ data = memory; }
+  var ok = data && Array.isArray(data.orders) && data.settings && Array.isArray(data.settings.norms)
+           && data.settings.norms.length===STAGES.length && typeof data.seq==='number';
+  return ok? data : null;
 }
 function save(){
   var data = { orders:orders, settings:settings, seq:seq };
@@ -204,6 +212,14 @@ var settings = state ? state.settings : JSON.parse(JSON.stringify(DEFAULT_SETTIN
 var seq = state ? state.seq : 100;
 
 /* ---------- расчёты ---------- */
+var SOON_DAYS = 3;
+function daysLeft(o){ return daysBetween(startOfToday(), parseIso(o.promised)); }
+function relDays(o){
+  if(o.done) return '';
+  var d=daysLeft(o);
+  if(d<0) return '';
+  return d===0? ' (сегодня)' : d===1? ' (завтра)' : ' (через '+d+' дн.)';
+}
 function remainingNorm(stage){
   var s=0; for(var i=stage;i<STAGES.length;i++) s+=Number(settings.norms[i])||0; return s;
 }
@@ -212,11 +228,12 @@ function riskOf(o){
   var left = daysBetween(startOfToday(), parseIso(o.promised));
   if(left<0) return {key:'over', text:'Просрочен на '+(-left)+' дн.', slack:left};
   var slack = left - remainingNorm(o.stage);
-  if(slack<0) return {key:'risk', text:'Не успеваем: нехватка '+(-slack)+' дн.', slack:slack};
-  if(slack<settings.tight) return {key:'tight', text:'Впритык: запас '+slack+' дн.', slack:slack};
-  return {key:'ok', text:'В графике: запас '+slack+' дн.', slack:slack};
+  if(slack<0) return {key:'risk', text:'Не успеваем по нормам: не хватает '+(-slack)+' дн.', slack:slack};
+  if(slack<settings.tight) return {key:'tight', text:'Впритык: запас '+slack+' дн. по нормам', slack:slack};
+  return {key:'ok', text:'В графике: запас '+slack+' дн. по нормам', slack:slack};
 }
 function contribution(o){ return (Number(o.amount)||0)-(Number(o.costs)||0); }
+function contribPctNum(o){ var a=Number(o.amount)||0; return a>0? Math.round(contribution(o)/a*100) : ''; }
 function contribPct(o){ var a=Number(o.amount)||0; return a>0? Math.round(contribution(o)/a*100)+'%':'—'; }
 
 /* ---------- DOM-утилиты ---------- */
@@ -235,7 +252,8 @@ function filtered(){
   return orders.filter(function(o){
     if(ch && o.channel!==ch) return false;
     var r=riskOf(o).key;
-    if(rk==='problem'){ if(r!=='over' && r!=='risk') return false; }
+    if(rk==='atrisk'){ if(r!=='risk' && r!=='tight') return false; }
+    else if(rk==='soon'){ var dl=daysLeft(o); if(o.done || dl<0 || dl>SOON_DAYS) return false; }
     else if(rk && r!==rk) return false;
     if(q){
       var hay=[o.num,o.city,o.owner,o.next,o.channel].join(' ').toLowerCase();
@@ -244,6 +262,8 @@ function filtered(){
     return true;
   });
 }
+function filtersActive(){ return !!($('q').value.trim() || $('fChannel').value || $('fRisk').value); }
+function resetFilters(){ $('q').value=''; $('fChannel').value=''; $('fRisk').value=''; }
 function refreshChannelFilter(){
   var sel=$('fChannel'), cur=sel.value;
   var chans=[], seen={};
@@ -269,15 +289,17 @@ function render(){
     var k=riskOf(o).key; if(k==='over') over++; else if(k==='risk'||k==='tight') risk++;
   });
   var sm=$('summary'); sm.textContent='';
-  [['В работе (по фильтру)',String(open.length)],
+  [['Открытых заказов (по фильтру)',String(open.length)],
    ['Просрочено',String(over)],
-   ['Под риском',String(risk)],
-   ['Сумма заказов',money(sumAmt)],
+   ['Под риском (не успеваем + впритык)',String(risk)],
+   ['Сумма открытых заказов',money(sumAmt)],
    ['Предв. вклад (не прибыль)',money(sumAmt-sumCost)]
   ].forEach(function(p){
     var s=el('div','stat'); s.appendChild(el('b',null,p[1])); s.appendChild(el('span',null,p[0])); sm.appendChild(s);
   });
 
+  var nothing=$('nothing');
+  nothing.hidden = !(filtersActive() && !list.length);
   var board=$('board'); board.textContent='';
   STAGES.forEach(function(name,idx){
     var col=el('section','col'); col.dataset.stage=idx;
@@ -286,11 +308,13 @@ function render(){
       var ra=RISK_ORDER[riskOf(a).key], rb=RISK_ORDER[riskOf(b).key];
       return ra-rb || (a.promised<b.promised?-1:1);
     });
-    var total=items.reduce(function(s,o){return s+(Number(o.amount)||0);},0);
+    var openItems=items.filter(function(o){return !o.done;});
+    var closedN=items.length-openItems.length;
+    var total=openItems.reduce(function(s,o){return s+(Number(o.amount)||0);},0);
     col.appendChild(el('h2',null,(idx+1)+'. '+name));
-    col.appendChild(el('div','meta',items.length+' зак. · '+money(total)));
+    col.appendChild(el('div','meta',openItems.length+' откр.'+(closedN?' + '+closedN+' закр.':'')+' · '+money(total)+' (откр.)'));
     var cards=el('div','cards');
-    if(!items.length) cards.appendChild(el('div','empty','Нет заказов'));
+    if(!items.length) cards.appendChild(el('div','empty', filtersActive()? 'Нет заказов, подходящих под фильтры' : 'На этом этапе заказов нет'));
     items.forEach(function(o){ cards.appendChild(card(o)); });
     col.appendChild(cards);
 
@@ -315,10 +339,11 @@ function card(o){
   top.appendChild(el('span','sub',o.city));
   c.appendChild(top);
   c.appendChild(el('div','sub',o.channel+' · '+o.owner));
-  c.appendChild(el('div','sub','Обещано клиенту: '+fmtDate(o.promised)));
+  c.appendChild(el('div','sub','Обещано клиенту: '+fmtDate(o.promised)+relDays(o)));
   c.appendChild(el('span','badge '+r.key,r.text));
-  var nx=el('div','next', o.next? ('→ '+o.next+(o.nextDue?' (до '+fmtDate(o.nextDue)+')':'')) : '⚠ Нет следующего действия');
-  if(!o.done && (!o.next || (o.nextDue && o.nextDue<iso(startOfToday())))) nx.classList.add('late');
+  var actLate = !o.done && o.next && o.nextDue && o.nextDue<iso(startOfToday());
+  var nx=el('div','next', o.next? ('→ '+o.next+(o.nextDue?' (до '+fmtDate(o.nextDue)+(actLate?', просрочено':'')+')':'')) : '⚠ Нет следующего действия');
+  if(!o.done && (!o.next || actLate)) nx.classList.add('late');
   c.appendChild(nx);
   var m=el('div','money');
   m.appendChild(el('span',null,'Сумма')); m.appendChild(el('span',null,money(o.amount)));
@@ -339,6 +364,10 @@ function card(o){
 function findOrder(id){ for(var i=0;i<orders.length;i++) if(String(orders[i].id)===String(id)) return orders[i]; return null; }
 function moveTo(id, stage){
   var o=findOrder(id); if(!o || o.stage===stage) { render(); return; }
+  if(o.done){
+    if(!confirm('Заказ '+o.num+' закрыт. Переместить на этап «'+STAGES[stage]+'» и снова сделать открытым?')){ render(); return; }
+    o.done=false; o.stage=stage; save(); render(); return;
+  }
   if(stage<o.stage && !confirm('Вернуть заказ '+o.num+' на этап «'+STAGES[stage]+'»?')){ render(); return; }
   o.stage=stage; save(); render();
 }
@@ -363,13 +392,19 @@ function openOrder(id){
   f.num.value=o.num; f.stage.value=o.stage; f.channel.value=o.channel; f.city.value=o.city; f.owner.value=o.owner;
   f.promised.value=o.promised; f.next.value=o.next; f.nextDue.value=o.nextDue||'';
   f.done.value=o.done?'1':'0'; f.amount.value=o.amount; f.costs.value=o.costs;
-  updatePreview();
+  checkNum(); updatePreview();
   $('dlg').showModal();
 }
-form.addEventListener('input',updatePreview);
+function checkNum(){
+  var v=form.elements.num.value.trim().toLowerCase();
+  var dup=orders.some(function(o){ return String(o.id)!==String(editingId) && o.num.toLowerCase()===v; });
+  form.elements.num.setCustomValidity(dup? 'Заказ с таким номером уже есть' : '');
+}
+form.addEventListener('input',function(){ checkNum(); updatePreview(); });
 form.addEventListener('submit',function(e){
   var f=form.elements;
-  if(!form.checkValidity()) return;
+  checkNum();
+  if(!form.checkValidity()){ e.preventDefault(); form.reportValidity(); return; }
   var data={ num:f.num.value.trim(), stage:Number(f.stage.value), channel:f.channel.value.trim(), city:f.city.value.trim(),
     owner:f.owner.value.trim(), promised:f.promised.value, next:f.next.value.trim(), nextDue:f.nextDue.value,
     done:f.done.value==='1', amount:Math.max(0,Number(f.amount.value)||0), costs:Math.max(0,Number(f.costs.value)||0) };
@@ -384,6 +419,7 @@ $('bDelete').addEventListener('click',function(){
     orders=orders.filter(function(x){return x!==o;}); save(); $('dlg').close(); refreshChannelFilter(); render();
   }
 });
+$('bClear').addEventListener('click',function(){ resetFilters(); render(); });
 $('bNew').addEventListener('click',function(){ openOrder(null); });
 
 /* ---------- нормы ---------- */
@@ -407,22 +443,22 @@ $('bNormsCancel').addEventListener('click',function(){ $('dlgNorms').close(); })
 /* ---------- CSV ---------- */
 function csvCell(v){
   var s = v==null? '' : String(v);
-  if(/^[=+\-@\t\r]/.test(s)) s="'"+s;          // защита от формул в Excel
+  if(typeof v!=='number' && /^[=+\-@\t\r]/.test(s)) s="'"+s;   // защита от формул в Excel (числа не трогаем)
   if(/[";\n\r]/.test(s)) s='"'+s.replace(/"/g,'""')+'"';
   return s;
 }
 $('bCsv').addEventListener('click',function(){
   var head=['Номер','Канал','Город','Этап','Ответственный','Обещанная дата','Следующее действие','Срок действия',
-            'Сумма, руб','Прямые затраты, руб','Предв. вклад, руб (не чистая прибыль)','Предв. вклад, %','Статус срока','Закрыт'];
+            'Сумма, руб','Прямые затраты, руб','Предв. вклад, руб (не чистая прибыль)','Предв. вклад, % от суммы','Статус срока','Закрыт'];
   var rows=[head];
   filtered().forEach(function(o){
     rows.push([o.num,o.channel,o.city,STAGES[o.stage],o.owner,o.promised,o.next,o.nextDue||'',
-      o.amount,o.costs,contribution(o),contribPct(o),riskOf(o).text,o.done?'да':'нет']);
+      o.amount,o.costs,contribution(o),contribPctNum(o),riskOf(o).text,o.done?'да':'нет']);
   });
   var text='﻿'+rows.map(function(r){return r.map(csvCell).join(';');}).join('\r\n');
   var blob=new Blob([text],{type:'text/csv;charset=utf-8'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download='demo-orders-'+iso(startOfToday())+'.csv';
+  a.download='demo-orders-'+iso(startOfToday())+(filtersActive()?'-filtered':'')+'.csv';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
 });
@@ -430,7 +466,7 @@ $('bCsv').addEventListener('click',function(){
 /* ---------- сброс ---------- */
 $('bReset').addEventListener('click',function(){
   if(!confirm('Сбросить все изменения и вернуть исходные демо-данные?')) return;
-  orders=demoOrders(); settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); seq=100;
+  orders=demoOrders(); settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); seq=100; resetFilters();
   save(); refreshChannelFilter(); render();
 });
 
