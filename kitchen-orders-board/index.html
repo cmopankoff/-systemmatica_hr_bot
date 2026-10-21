@@ -68,14 +68,45 @@ dialog h3{margin:0 0 10px}
 .norms label{font-size:12px;color:var(--muted);display:flex;flex-direction:column}
 .norms input{width:84px}
 @media (max-width:700px){.form{grid-template-columns:1fr}}
+.banner .short{display:none}
+/* телефон: компактная шапка, чтобы доска была видна на первом экране */
+@media (max-width:700px){
+  header{padding:10px 12px 0}
+  h1{font-size:18px;margin-bottom:6px}
+  .banner .long{display:none}
+  .banner .short{display:inline}
+  .banner{padding:6px 10px;margin-bottom:8px;font-size:12px}
+  .summary{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px}
+  .stat{min-width:0;padding:4px 8px;grid-column:span 2}
+  .stat:nth-child(n+4){grid-column:span 3}
+  .stat b{font-size:15px}
+  .stat span{font-size:11px;line-height:1.25;display:block}
+  .toolbar{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:6px;padding:0 12px 10px}
+  .toolbar input[type=search]{grid-column:1/-1;max-width:none}
+  .toolbar select,.toolbar input[type=search],.toolbar button{min-width:0;width:100%}
+  .toolbar .spacer{display:none}
+  .toolbar button{align-self:stretch}
+  .toolbar button{white-space:normal}
+  .board{padding:0 12px 20px}
+  .foot{padding:0 12px 20px}
+}
+/* сенсорные экраны и узкие окна: крупные цели касания, 16px против авто-зума iOS */
+@media (pointer:coarse),(max-width:700px){
+  input,select,textarea,button{font-size:16px;min-height:40px}
+  .card select{margin-top:8px;padding:6px 8px;font-size:16px}
+  .card .actions button{min-height:40px;padding:6px 16px;font-size:14px}
+}
 </style>
 </head>
 <body>
 <header>
   <h1>Доска заказов кухонь — демо-прототип</h1>
   <div class="banner">
+    <span class="long">
     <b>Все данные вымышленные</b> (заказы «ДЕМО-…», города, каналы и сотрудники придуманы для показа).
     «Предварительный вклад» = сумма заказа − введённые прямые затраты. Это <b>не чистая прибыль</b>: косвенные расходы, налоги и прочее не учитываются.
+    </span>
+    <span class="short"><b>Данные вымышленные.</b> Предв. вклад = сумма − прямые затраты, это <b>не чистая прибыль</b>.</span>
   </div>
   <div class="summary" id="summary"></div>
 </header>
