@@ -69,12 +69,15 @@ dialog h3{margin:0 0 10px}
 .norms input{width:84px}
 @media (max-width:700px){.form{grid-template-columns:1fr}}
 .banner .short{display:none}
+.bs{display:none}
 /* телефон: компактная шапка, чтобы доска была видна на первом экране */
 @media (max-width:700px){
   header{padding:10px 12px 0}
   h1{font-size:18px;margin-bottom:6px}
   .banner .long{display:none}
   .banner .short{display:inline}
+  .bl{display:none}
+  .bs{display:inline}
   .banner{padding:6px 10px;margin-bottom:8px;font-size:12px}
   .summary{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px}
   .stat{min-width:0;padding:4px 8px;grid-column:span 2}
@@ -124,7 +127,7 @@ dialog h3{margin:0 0 10px}
     <option value="atrisk">Под риском (не успеваем + впритык)</option>
     <option value="soon">Срок клиенту в ближайшие 3 дня</option>
   </select>
-  <button id="bNew" class="primary">+ Новый заказ</button>
+  <button id="bNew" class="primary" aria-label="Новый заказ"><span class="bl">+ Новый заказ</span><span class="bs">+ Заказ</span></button>
   <span class="spacer"></span>
   <button id="bNorms">Нормы этапов</button>
   <button id="bCsv">Выгрузить CSV</button>
